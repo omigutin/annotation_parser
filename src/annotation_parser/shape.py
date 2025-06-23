@@ -22,12 +22,12 @@ class Shape:
             - Поддержка смещения (shift_point) для расчёта относительных координат.
             - Расширяемость через meta (можно хранить любые дополнительные атрибуты).
 
-        Пример использования:
+        Samples:
             for shape in shapes:
                 print(shape.label, shape.type, shape.rect)
                 img = cv2.polylines(img, [shape.contour], ...)
 
-        Атрибуты:
+        Args:
             label (str): Метка фигуры (например, 'person', 'car').
             coords (Coords): Список координат [[x, y], ...], определяющих фигуру.
             type (ShapeType): Тип фигуры (line, polygon, rectangle, point).
@@ -54,6 +54,14 @@ class Shape:
     meta: Dict[str, Any] = field(default_factory=dict)
 
     @property
+    def is_individual(self) -> bool:
+        """
+            Возвращает True, если фигура относится к определённой зоне (индивидуальная),
+            и False — если она общая (относится ко всем зонам, number=None).
+        """
+        return self.number is not None
+
+    @property
     def contour(self) -> np.ndarray:
         """
             Контур (np.ndarray) из coords.
@@ -68,7 +76,7 @@ class Shape:
             Ограничивающий прямоугольник (bounding box) для фигуры.
             Returns:
                 (minx, miny, maxx, maxy) как tuple из float.
-            Исключение:
+            Raises:
                 ValueError: Если coords пусты.
         """
         if not self.coords:
@@ -111,7 +119,7 @@ class Shape:
             Ограничивающий прямоугольник по смещённым координатам.
             Returns:
                 (minx, miny, maxx, maxy) как tuple из float.
-            Исключение:
+            Raises:
                 ValueError: Если coords пусты.
         """
         if not self.shifted_coords:

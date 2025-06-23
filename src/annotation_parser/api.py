@@ -132,7 +132,7 @@ def save(
         raise ValueError("file_path must be provided for stateless save().")
     if not markup_type:
         raise ValueError("markup_type must be provided for stateless save().")
-    AnnotationFile(file_path, markup_type, keep_json=True).save(shapes, backup=backup)
+    AnnotationFile(file_path, markup_type, keep_json=True, validate_file=False).save(shapes, backup=backup)
 
 
 def save_labelme(shapes: Tuple[Shape, ...], file_path: Union[str, Path], backup: bool = False) -> None:

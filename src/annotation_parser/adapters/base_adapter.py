@@ -1,24 +1,28 @@
-__all__ = ['BaseAdapter']
+__all__ = ['BaseAdapter', 'AdapterType']
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Tuple, Dict
+from typing import Any, Optional, Tuple, Dict, TypeVar, Generic
 
 from ..shape import Shape
 from ..public_enums import ShapeType
 
+AdapterType = TypeVar('AdapterType', bound='BaseAdapter')
 
-class BaseAdapter(ABC):
+
+class BaseAdapter(ABC, Generic[AdapterType]):
     """
         Абстрактный базовый класс для всех адаптеров форматов разметки.
         Контракт:
-            - from_json: превращает json-данные в кортеж Shape.
+            - load: превращает json-данные в кортеж Shape.
             - shapes_to_json: сериализует кортеж Shape обратно в json (для сохранения).
         Для регистрации адаптеров используется AdapterFactory.
     """
 
+    adapter_name: str = ""
+
     @staticmethod
     @abstractmethod
-    def from_json(json_data: Any, shift_point: Optional[Any] = None) -> Tuple[Shape, ...]:
+    def load(json_data: Any, shift_point: Optional[Any] = None) -> Tuple[Shape, ...]:
         """
             Преобразует json-данные в кортеж Shape.
             Args:

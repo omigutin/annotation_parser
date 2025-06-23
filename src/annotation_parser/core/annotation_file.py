@@ -1,10 +1,10 @@
 __all__ = ['AnnotationFile']
 
-from typing import Tuple, Any, Optional, Union, Type
+from typing import Tuple, Any, Optional, Union
 from pathlib import Path
 import json
 
-from ..adapters import BaseAdapter
+from ..adapters.base_adapter import AdapterType
 from ..public_enums import Adapters
 from ..shape import Shape
 from ..adapters.adapter_factory import AdapterFactory
@@ -23,17 +23,36 @@ class AnnotationFile:
                  file_path: Union[str, Path],
                  markup_type: str | Adapters,
                  keep_json: bool = False,
-                 shift_point: Optional[Any] = None):
-        self._file_path: str = self.__get_file_path(file_path)
-        self._adapter: Type[BaseAdapter] = AdapterFactory.get_adapter(markup_type)
-        self._json_data = self.__load_json(self._file_path) if keep_json else None
+                 validate_file: bool = True,
+                 shift_point: Optional[Any] = None) -> None:
+        """
+            Инициализация объекта для работы с файлом разметки.
+            Args:
+                file_path (str | Path): Путь к файлу разметки.
+                markup_type (str | Adapters): Тип формата разметки (например, 'labelme').
+                keep_json (bool, optional): Если True — хранить исходный json в памяти (для ускорения и доп. операций).
+                                            По умолчанию False.
+                validate_file (bool, optional):
+                    Проверять существование файла при инициализации.
+                    - True (по умолчанию): используется для чтения/парсинга — файл должен существовать.
+                    - False: используется для сценариев записи/сохранения по новому пути, когда файл может ещё
+                             не существовать (например, при экспорте или копировании).
+                shift_point (Any, optional): Смещение координат (если требуется по задаче).
+            Raises:
+                FileNotFoundError: Если validate_file=True и файл не найден.
+                ValueError: Если не удалось создать адаптер для указанного типа разметки.
+        """
+        self._file_path: str = (self._get_file_path(file_path) if validate_file else str(Path(file_path)))
+        self._adapter: AdapterType = AdapterFactory.get_adapter(markup_type)
+        self._json_data = self._load_json(self._file_path) if keep_json else None
         self._shapes: Optional[Tuple[Shape, ...]] = None
         self._shift_point: Optional[Any] = shift_point
 
     def parse(self) -> Tuple[Shape, ...]:
         """
             Парсит аннотационный файл и возвращает кортеж фигур Shape.
-            - Использует ранее загруженный JSON из файла (self._json_data), так как объект всегда создаётся через create(..., keep_json=True).
+            - Использует ранее загруженный JSON из файла (self._json_data),
+              так как объект всегда создаётся через create(..., keep_json=True).
             - Преобразует данные через адаптер в кортеж фигур.
             - Кэширует результат для повторных вызовов (self._shapes).
             Returns:
@@ -45,18 +64,25 @@ class AnnotationFile:
             self._shapes = AnnotationParser.parse(self._json_data, self._adapter, shift_point=self._shift_point)
         return self._shapes
 
-    def get_shapes_by_label(self, label: str) -> Tuple[Shape, ...]:
+    def get_shapes_by_label(self, label: str, individual: bool = True, common: bool = True) -> Tuple[Shape, ...]:
         """
             Возвращает кортеж фигур с заданным label (поиск по кэшированным данным).
             Если фигуры ещё не были распарсены, автоматически вызывает parse().
             Args:
                 label (str): Имя метки (label), по которому фильтруются фигуры.
+                individual (bool): Включая индивидуальные фигуры (фигуры с номером).
+                common (bool): Включая общие фигуры (фигуры без номера).
             Returns:
                 Tuple[Shape, ...]: Кортеж фигур с заданной меткой.
         """
+        if not (individual or common):
+            return ()
         if self._shapes is None:
             self.parse()
-        return tuple(shape for shape in self._shapes if shape.label == label)
+        return tuple(
+            shape for shape in self._shapes
+            if shape.label == label and ((individual and shape.is_individual) or (common and not shape.is_individual))
+        )
 
     def filter_shapes(self, predicate) -> Tuple[Shape, ...]:
         """
@@ -77,7 +103,7 @@ class AnnotationFile:
             Если backup=True и файл существует, автоматически создаёт резервную копию с меткой времени.
             Args:
                 shapes: Кортеж фигур для сохранения.
-                backup: Делать ли резервную копию перед перезаписью (по умолчанию — да).
+                backup: Делать ли резервную копию перед перезаписью (по умолчанию — НЕТ).
             Raises:
                 FileNotFoundError, OSError, ValueError — если возникли ошибки при записи или доступе к файлу.
         """
@@ -88,7 +114,7 @@ class AnnotationFile:
                              backup=backup)
 
     @staticmethod
-    def __load_json(file_path: str) -> Any:
+    def _load_json(file_path: str) -> Any:
         """
             Загружает JSON-файл.
             Args:
@@ -114,7 +140,7 @@ class AnnotationFile:
             raise
 
     @staticmethod
-    def __get_file_path(file_path: str | Path) -> str:
+    def _get_file_path(file_path: str | Path) -> str:
         """
             Проверяет существование файла разметки и возвращает его путь в виде строки.
             Args:

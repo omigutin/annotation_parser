@@ -2,14 +2,12 @@ __all__ = ['ShapeType', 'ShapePosition', 'Adapters']
 
 from enum import Enum
 
-from .adapters import LabelMeAdapter, CocoAdapter, VocAdapter
-
 
 class Adapters(Enum):
     """ Адаптеры регистрируем с доступом к .model """
-    labelme = LabelMeAdapter
-    coco = CocoAdapter
-    voc = VocAdapter
+    labelme = "labelme"
+    coco = "coco"
+    voc = "voc"
 
 
 class ShapePosition(str, Enum):

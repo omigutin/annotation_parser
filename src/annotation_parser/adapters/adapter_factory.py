@@ -1,49 +1,31 @@
 __all__ = ['AdapterFactory']
 
-from typing import Type, List
+from typing import List, Union
 
 from ..public_enums import Adapters
-from .base_adapter import BaseAdapter
+from .adapter_registration import AdapterRegistration
+from .base_adapter import AdapterType
 
 
 class AdapterFactory:
     """
-        Унифицированная фабрика для поиска, регистрации и получения нужного адаптера по формату.
-        Работает через внутренний реестр, который можно расширять во время выполнения.
+        Публичная фасадная точка для работы с адаптерами разметки.
     """
-    _registry: dict[str, Type[BaseAdapter]] = {}
 
-    @classmethod
-    def register_adapter(cls, name: str, adapter: Type[BaseAdapter]) -> None:
-        """ Регистрирует адаптер для указанного формата (переопределяет, если такой уже был). """
-        cls._registry[name.lower()] = adapter
+    @staticmethod
+    def register_adapter(name: str, adapter: AdapterType) -> None:
+        AdapterRegistration.register_adapter(name, adapter)
 
-    @classmethod
-    def list_adapters(cls) -> List[str]:
-        """ Список всех зарегистрированных адаптеров (ключей форматов). """
-        return list(cls._registry.keys())
+    @staticmethod
+    def list_adapters() -> List[str]:
+        return AdapterRegistration.list_adapters()
 
-    @classmethod
-    def get_adapter(cls, markup_type: str | Adapters) -> Type[BaseAdapter]:
-        """
-            Унифицированный способ получить класс-адаптер по типу разметки.
-            Args:
-                markup_type: Название ('labelme', 'coco', ...) или Enum Adapters.
-            Returns:
-                Класс-адаптер.
-            Raises:
-                ValueError: Если адаптер не зарегистрирован.
-                TypeError: Если передан некорректный тип.
-        """
+    @staticmethod
+    def get_adapter(markup_type: Union[str, Adapters]) -> AdapterType:
         if isinstance(markup_type, str):
-            key = markup_type.lower()
+            key = markup_type
         elif isinstance(markup_type, Adapters):
-            key = markup_type.name.lower()
+            key = markup_type.name
         else:
             raise TypeError(f"markup_type must be str or Adapters, not {type(markup_type).__name__}")
-
-        try:
-            return cls._registry[key]
-        except KeyError:
-            raise ValueError(f'Adapter "{key}" is not registered. '
-                             f'Available: {", ".join(cls._registry.keys())}')
+        return AdapterRegistration.get_adapter(key)
