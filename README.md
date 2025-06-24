@@ -152,9 +152,16 @@ python cli.py filter --file tests/labelme/labelme_test.json --adapter labelme --
 
 ## Contributing
 
-* PRs, bug reports, and suggestions are welcome!
-* For new formats, contribute an adapter in `src/annotation_parser/adapters/`
-* All code should be type-checked (`mypy`), formatted (`black`), and covered by tests (`pytest`).
+* Any pull requests, bug reports, and suggestions are welcome!
+* All new features, improvements, and fixes should be submitted via Pull Request to the develop branch.
+* The main branch is used for stable releases only.
+* To add support for new formats, create adapters in src/annotation_parser/adapters/.
+* All changes are reviewed before merging.
+* All code should be type-checked (mypy), formatted (black), and covered by tests (pytest).
+* Open an Issue if you have a feature request, or help implement a new adapter!
+* Want to become a contributor?
+* Fork the repo, create a feature branch from develop, submit your PR, or simply contact me (see Author for contacts).
+* Any help and ideas for new formats are very welcome!
 
 ---
 
