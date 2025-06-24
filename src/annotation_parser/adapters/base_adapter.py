@@ -1,10 +1,10 @@
 __all__ = ['BaseAdapter', 'AdapterType']
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Tuple, Dict, TypeVar, Generic
+from typing import Any, Tuple, Dict, TypeVar, Generic
 
 from ..shape import Shape
-from ..public_enums import ShapeType
+from ..types import ShiftPointType
 
 AdapterType = TypeVar('AdapterType', bound='BaseAdapter')
 
@@ -22,7 +22,7 @@ class BaseAdapter(ABC, Generic[AdapterType]):
 
     @staticmethod
     @abstractmethod
-    def load(json_data: Any, shift_point: Optional[Any] = None) -> Tuple[Shape, ...]:
+    def load(json_data: Any, shift_point: ShiftPointType = None) -> Tuple[Shape, ...]:
         """
             Преобразует json-данные в кортеж Shape.
             Args:
@@ -31,7 +31,7 @@ class BaseAdapter(ABC, Generic[AdapterType]):
             Returns:
                 Tuple[Shape, ...]: Кортеж бизнес-объектов Shape.
             """
-        pass
+        raise NotImplementedError("Adapter must implement load()")
 
     @staticmethod
     @abstractmethod
@@ -44,17 +44,7 @@ class BaseAdapter(ABC, Generic[AdapterType]):
             Returns:
                 dict: Сериализованный json-объект.
         """
-        pass
-
-    @staticmethod
-    def _two_coords_to_four(coords: list, shape_type: str | ShapeType) -> list:
-        """ Для прямоугольника: если передано 2 точки — строит 4 угла. """
-        stype = shape_type.value if isinstance(shape_type, ShapeType) else shape_type
-        if (stype.lower() == "rectangle" or stype == ShapeType.RECTANGLE) and len(coords) == 2:
-            x1, y1 = coords[0]
-            x2, y2 = coords[1]
-            return [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
-        return coords
+        raise NotImplementedError("Adapter must implement shapes_to_json()")
 
     @staticmethod
     def _get_field(obj: Any, name: str, default: Any = None) -> Any:

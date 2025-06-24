@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from src.annotation_parser.api import filter_shapes
+from src.annotation_parser import Shape
 from src.annotation_parser import create, parse_labelme, save_labelme
 
 
@@ -11,6 +13,7 @@ def divider(title: str = ""):
 
 def main():
     labelme()
+    shapes_api()
 
 
 def labelme():
@@ -23,6 +26,10 @@ def labelme():
     try:
         parser = create(file, 'labelme')
         shapes = parser.parse()
+        print(f"Parsed {len(shapes)} shapes:")
+        for shape in shapes:
+            print(" —", shape)
+        shapes = parser.se()
         print(f"Parsed {len(shapes)} shapes:")
         for shape in shapes:
             print(" —", shape)
@@ -62,15 +69,15 @@ def labelme():
         print("Пример:", shapes_cat[0])
 
     # Тест 6: Ошибка — неверный путь
-    divider("Ошибка: неверный путь")
+    divider("[ERROR] неверный путь")
     try:
         parser_bad = create(file.parent / "not_exists.json", 'labelme')
         parser_bad.parse()
     except Exception as e:
-        print(f"Ожидаемая ошибка: {e}")
+        print(f"[ERROR] {e}")
 
     # Тест 7: Ошибка — некорректный JSON
-    divider("Ошибка: некорректный JSON")
+    divider("[ERROR] некорректный JSON")
     try:
         # создадим временный файл с некорректным JSON
         bad_json_path = file.parent / "bad.json"
@@ -80,7 +87,7 @@ def labelme():
             parser_bad_json = create(bad_json_path, 'labelme')
             parser_bad_json.parse()
         except Exception as e2:
-            print(f"Ожидаемая ошибка: {e2}")
+            print(f"[ERROR] {e2}")
         finally:
             bad_json_path.unlink()
     except Exception as e:
@@ -94,6 +101,54 @@ def labelme():
         print("Пример:", shapes_large[0])
 
     divider("THE END")
+
+
+def shapes_api():
+    # Допустим, у нас есть кортеж фигур
+    shapes = (
+        Shape(label="person", coords=[[1, 2], [3, 4]], type=None, number=1, wz_number=2),
+        Shape(label="car", coords=[[5, 6], [7, 8]], type=None, number=None, wz_number=2),
+        Shape(label="person", coords=[[2, 2], [4, 4]], type=None, number=2, wz_number=3),
+    )
+
+    # 1. Найти все фигуры с label == "person"
+    persons = filter_shapes(shapes, lambda s: s.label == "person")
+    print(persons)
+    # → tuple из двух Shape с label 'person'
+
+    # 2. Найти все фигуры, относящиеся к рабочей зоне 2
+    zone2 = filter_shapes(shapes, lambda s: s.wz_number == 2)
+    print(zone2)
+    # → две фигуры: "person" и "car" (wz_number=2)
+
+    # 3. Найти все индивидуальные фигуры с label "person"
+    persons_indiv = filter_shapes(
+        shapes,
+        lambda s: s.label == "person",
+        individual=True,
+        common=False,
+    )
+    print(persons_indiv)
+    # → только индивидуальные "person" (т.е. те, у кого .number не None)
+
+    # 4. Найти только общие фигуры (без number), с любым label
+    common_shapes = filter_shapes(
+        shapes,
+        lambda s: True,
+        individual=False,
+        common=True,
+    )
+    print(common_shapes)
+    # → фигуры, у которых .number is None
+
+    # 5. Сложные фильтры: например, все "person" в рабочей зоне 2, только общие
+    complex = filter_shapes(
+        shapes,
+        lambda s: s.label == "person" and s.wz_number == 2,
+        individual=False,
+        common=True,
+    )
+    print(complex)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 __all__ = ['AnnotationFile']
 
-from typing import Tuple, Any, Optional, Union
+from typing import Tuple, Any, Optional, Union, Callable
 from pathlib import Path
 import json
 
@@ -10,6 +10,7 @@ from ..shape import Shape
 from ..adapters.adapter_factory import AdapterFactory
 from .annotation_parser import AnnotationParser
 from .annotation_saver import AnnotationSaver
+from ..types import ShiftPointType
 
 
 class AnnotationFile:
@@ -24,7 +25,7 @@ class AnnotationFile:
                  markup_type: str | Adapters,
                  keep_json: bool = False,
                  validate_file: bool = True,
-                 shift_point: Optional[Any] = None) -> None:
+                 shift_point: ShiftPointType = None) -> None:
         """
             Инициализация объекта для работы с файлом разметки.
             Args:
@@ -44,9 +45,12 @@ class AnnotationFile:
         """
         self._file_path: str = (self._get_file_path(file_path) if validate_file else str(Path(file_path)))
         self._adapter: AdapterType = AdapterFactory.get_adapter(markup_type)
-        self._json_data = self._load_json(self._file_path) if keep_json else None
+        if keep_json and (validate_file or Path(file_path).exists()):
+            self._json_data = self._load_json(self._file_path)
+        else:
+            self._json_data = None
         self._shapes: Optional[Tuple[Shape, ...]] = None
-        self._shift_point: Optional[Any] = shift_point
+        self._shift_point: ShiftPointType = shift_point
 
     def parse(self) -> Tuple[Shape, ...]:
         """
@@ -63,39 +67,6 @@ class AnnotationFile:
         if self._shapes is None:
             self._shapes = AnnotationParser.parse(self._json_data, self._adapter, shift_point=self._shift_point)
         return self._shapes
-
-    def get_shapes_by_label(self, label: str, individual: bool = True, common: bool = True) -> Tuple[Shape, ...]:
-        """
-            Возвращает кортеж фигур с заданным label (поиск по кэшированным данным).
-            Если фигуры ещё не были распарсены, автоматически вызывает parse().
-            Args:
-                label (str): Имя метки (label), по которому фильтруются фигуры.
-                individual (bool): Включая индивидуальные фигуры (фигуры с номером).
-                common (bool): Включая общие фигуры (фигуры без номера).
-            Returns:
-                Tuple[Shape, ...]: Кортеж фигур с заданной меткой.
-        """
-        if not (individual or common):
-            return ()
-        if self._shapes is None:
-            self.parse()
-        return tuple(
-            shape for shape in self._shapes
-            if shape.label == label and ((individual and shape.is_individual) or (common and not shape.is_individual))
-        )
-
-    def filter_shapes(self, predicate) -> Tuple[Shape, ...]:
-        """
-            Возвращает кортеж фигур, удовлетворяющих произвольному предикату (поиск по кэшированным данным).
-            Если фигуры ещё не были распарсены, автоматически вызывает parse().
-            Args:
-                predicate (Callable): Функция, принимающая объект Shape и возвращающая bool.
-            Returns:
-                Tuple[Shape, ...]: Кортеж фигур, удовлетворяющих предикату.
-        """
-        if self._shapes is None:
-            self.parse()
-        return tuple(shape for shape in self._shapes if predicate(shape))
 
     def save(self, shapes: Tuple[Shape, ...], backup: bool = False) -> None:
         """
@@ -130,13 +101,13 @@ class AnnotationFile:
             with open(file_path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except FileNotFoundError:
-            print(f"[ERROR] Файл не найден: {file_path}")
+            print(f"[ERROR] File not found: {file_path}")
             raise
         except json.JSONDecodeError as e:
-            print(f"[ERROR] Некорректный JSON в файле {file_path}: {e}")
+            print(f"[ERROR] Invalid JSON in file {file_path}: {e}")
             raise
         except OSError as e:
-            print(f"[ERROR] Ошибка доступа к файлу {file_path}: {e}")
+            print(f"[ERROR] File access error for {file_path}: {e}")
             raise
 
     @staticmethod

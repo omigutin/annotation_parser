@@ -1,9 +1,9 @@
 __all__ = ['CocoAdapter']
 
-from typing import Optional, Any, Tuple, Dict
-from shapely.geometry import Point
+from typing import Any, Tuple, Dict
 
 from ..shape import Shape
+from ..types import ShiftPointType
 from ..public_enums import ShapeType
 from ..models import JsonCocoAnnotation
 from .adapter_registration import AdapterRegistration
@@ -19,12 +19,12 @@ class CocoAdapter(BaseAdapter, metaclass=AdapterRegistration):
     adapter_name = "coco"
 
     @staticmethod
-    def load(json_data: Any, shift_point: Optional[Point] = None) -> Tuple[Shape, ...]:
+    def load(json_data: Any, shift_point: ShiftPointType = None) -> Tuple[Shape, ...]:
         """
             Преобразует COCO-аннотации (dict с annotations и categories) в кортеж Shape.
             Args:
                 json_data (dict): Данные COCO ({"annotations": [...], "categories": [...], ...}).
-                shift_point (Optional[Point]): Смещение.
+                shift_point (ShiftPointType): Смещение.
             Returns:
                 Tuple[Shape, ...]: Кортеж Shape.
             Raises:
@@ -43,22 +43,21 @@ class CocoAdapter(BaseAdapter, metaclass=AdapterRegistration):
         return tuple(result)
 
     @staticmethod
-    def to_shape(obj: JsonCocoAnnotation, label: str, shift_point: Optional[Point] = None) -> Shape:
+    def to_shape(obj: JsonCocoAnnotation, label: str, shift_point: ShiftPointType = None) -> Shape:
         """
             Преобразует JsonCocoAnnotation в Shape.
             Args:
                 obj (JsonCocoAnnotation): Аннотация COCO.
                 label (str): Название категории.
-                shift_point (Optional[Point]): Смещение.
+                shift_point (ShiftPointType): Смещение.
             Returns:
                 Shape: Бизнес-объект.
         """
         # COCO bbox: [x, y, width, height]
         x, y, w, h = obj.bbox
-        coords = BaseAdapter._two_coords_to_four([[x, y], [x + w, y + h]], ShapeType.RECTANGLE)
         return Shape(
             label=label,
-            coords=coords,
+            coords=[[x, y], [x + w, y + h]],
             type=ShapeType.RECTANGLE,
             number=obj.id,
             description=None,
@@ -94,9 +93,8 @@ class CocoAdapter(BaseAdapter, metaclass=AdapterRegistration):
             Returns:
                 JsonCocoAnnotation: Модель COCO.
         """
-        coords = BaseAdapter._two_coords_to_four(shape.coords, ShapeType.RECTANGLE)
-        x1, y1 = coords[0]
-        x2, y2 = coords[2]
+        x1, y1 = shape.coords[0]
+        x2, y2 = shape.coords[2]
         bbox = [float(x1), float(y1), float(x2 - x1), float(y2 - y1)]
         # Сюда можно добавить category_id если есть маппинг label -> id
         return JsonCocoAnnotation(

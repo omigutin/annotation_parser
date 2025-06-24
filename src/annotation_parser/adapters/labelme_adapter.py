@@ -1,12 +1,11 @@
 __all__ = ['LabelMeAdapter']
 
 from typing import Optional, Tuple, Any
-from shapely.geometry import Point
-from copy import deepcopy
 
 from ..shape import Shape
+from ..types import ShiftPointType
 from ..public_enums import ShapeType, ShapePosition
-from ..models.labelme_models import JsonLabelmeShape, JsonLabelme
+from ..models.labelme_model import JsonLabelmeShape, JsonLabelme
 from .adapter_registration import AdapterRegistration
 from .base_adapter import BaseAdapter
 
@@ -20,12 +19,12 @@ class LabelMeAdapter(BaseAdapter, metaclass=AdapterRegistration):
     adapter_name = "labelme"
 
     @staticmethod
-    def load(json_data: Any, shift_point: Optional[Point] = None) -> Tuple[Shape, ...]:
+    def load(json_data: Any, shift_point: ShiftPointType = None) -> Tuple[Shape, ...]:
         """
             Преобразует LabelMe-JSON в кортеж Shape.
             Args:
                 json_data (dict): LabelMe-данные.
-                shift_point (Optional[Point]): Смещение координат (если требуется).
+                shift_point (ShiftPointType): Смещение координат (если требуется).
             Returns:
                 Tuple[Shape, ...]: Кортеж фигур Shape.
             Raises:
@@ -48,33 +47,22 @@ class LabelMeAdapter(BaseAdapter, metaclass=AdapterRegistration):
         # Собираем shapes-модели по pydantic
         shapes_models = [LabelMeAdapter._shape_to_raw(shape) for shape in shapes]
 
-        # Читаем значения полей из оригинала (если есть)
-        image_path = (original_json.get('imagePath') if original_json and 'imagePath' in original_json else None)
-        image_height = (original_json.get('imageHeight') if original_json and 'imageHeight' in original_json else None)
-        image_width = (original_json.get('imageWidth') if original_json and 'imageWidth' in original_json else None)
-        image_data = (original_json.get('imageData') if original_json and 'imageData' in original_json else None)
-        version = (original_json.get('version') if original_json and 'version' in original_json else None)
-        flags = (original_json.get('flags') if original_json and 'flags' in original_json else None)
-        line_color = (original_json.get('lineColor') if original_json and 'lineColor' in original_json else None)
-        fill_color = (original_json.get('fillColor') if original_json and 'fillColor' in original_json else None)
+        # Используем только реально существующие поля, иначе дефолты от pydantic
+        fields = {}
+        if original_json:
+            for k in (
+            "version", "flags", "imagePath", "imageData", "imageHeight", "imageWidth", "lineColor", "fillColor"):
+                v = original_json.get(k, None)
+                if v is not None:
+                    fields[k] = v
+        fields["shapes"] = shapes_models
 
-        # Собираем объект по полной модели (все дефолты из модели, если не задано)
-        labelme_obj = JsonLabelme(
-            version=version,
-            flags=flags,
-            shapes=shapes_models,
-            imagePath=image_path,
-            imageData=image_data,
-            imageHeight=image_height,
-            imageWidth=image_width,
-            lineColor=line_color,
-            fillColor=fill_color,
-        )
-        # Гарантируем наличие всех полей и дефолтов по спецификации
+        # Собираем объект по полной модели (дефолты модели будут использоваться если значения нет)
+        labelme_obj = JsonLabelme(**fields)
         return labelme_obj.model_dump(mode='json', by_alias=True)
 
     @staticmethod
-    def _to_shape(js: Any, shift_point: Optional[Point] = None) -> Shape:
+    def _to_shape(js: Any, shift_point: ShiftPointType = None) -> Shape:
         """
             Преобразует JsonLabelmeShape (pydantic) в Shape.
             Args:
@@ -87,7 +75,7 @@ class LabelMeAdapter(BaseAdapter, metaclass=AdapterRegistration):
             js = JsonLabelmeShape.model_validate(js)
         return Shape(
             label=BaseAdapter._get_field(js, "label"),
-            coords=BaseAdapter._two_coords_to_four(js.points, BaseAdapter._get_field(js, "shape_type")),
+            coords=js.points,
             type=LabelMeAdapter._parse_shape_type(BaseAdapter._get_field(js, "shape_type")),
             number=BaseAdapter._get_field(js, "group_id"),
             description=BaseAdapter._get_field(js, "description"),

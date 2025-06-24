@@ -1,14 +1,15 @@
+from __future__ import annotations
+
 __all__ = ['Shape']
 
 from dataclasses import dataclass, field
-from typing import Optional, Any, List, Dict, Tuple
+from typing import Optional, Any, Dict, Tuple, List, Callable
 import numpy as np
-from shapely.geometry import Point, LineString as Line, Polygon
+from shapely.geometry import LineString as Line, Polygon, Point
 
 from .public_enums import ShapeType, ShapePosition
-
-# Тип для координат: список пар [x, y]
-Coords = List[List[float]]
+from .types import Coords
+from .utils import to_point, to_coords, two_coords_to_four
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,11 +23,6 @@ class Shape:
             - Поддержка смещения (shift_point) для расчёта относительных координат.
             - Расширяемость через meta (можно хранить любые дополнительные атрибуты).
 
-        Samples:
-            for shape in shapes:
-                print(shape.label, shape.type, shape.rect)
-                img = cv2.polylines(img, [shape.contour], ...)
-
         Args:
             label (str): Метка фигуры (например, 'person', 'car').
             coords (Coords): Список координат [[x, y], ...], определяющих фигуру.
@@ -37,7 +33,7 @@ class Shape:
             mask (Optional[np.ndarray]): Маска сегментации (если присутствует).
             position (Optional[ShapePosition]): Положение фигуры (см. ShapePosition).
             wz_number (Optional[int]): Номер рабочей зоны (если разметка по зонам).
-            shift_point (Optional[Point]): Точка смещения для относительных координат (shapely.geometry.Point).
+            shift_point (Optional[Point]): Точка смещения для относительных координат (shapely.geometry.Point и др.).
             meta (Dict): Любые дополнительные свойства (confidence, score, custom data и др.).
     """
 
@@ -53,32 +49,34 @@ class Shape:
     shift_point: Optional[Point] = None
     meta: Dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        """
+            Приводит поля к внутреннему формату и гарантирует корректность структуры Shape.
+              - shift_point всегда приводится к Point (или None).
+              - coords всегда приводится к List[List[float]], числа приводятся к float.
+              - Для прямоугольника с двумя точками coords автоматически преобразуются в четыре угла.
+            Raises:
+                ValueError: coords не могут быть преобразованы в корректную фигуру.
+                TypeError: shift_point передан в неподдерживаемом формате.
+        """
+        object.__setattr__(self, 'shift_point', to_point(self.shift_point))
+        norm_coords = to_coords(self.coords)
+        norm_coords = two_coords_to_four(norm_coords, self.type)
+        object.__setattr__(self, 'coords', norm_coords)
+
     @property
     def is_individual(self) -> bool:
-        """
-            Возвращает True, если фигура относится к определённой зоне (индивидуальная),
-            и False — если она общая (относится ко всем зонам, number=None).
-        """
+        """ True, если фигура относится к определённой зоне (индивидуальная), иначе общая. """
         return self.number is not None
 
     @property
     def contour(self) -> np.ndarray:
-        """
-            Контур (np.ndarray) из coords.
-            Returns:
-                np.ndarray: Контур для OpenCV или вычислений, shape (N, 1, 2).
-        """
+        """ Контур (np.ndarray) из coords, shape (N, 1, 2) для OpenCV. """
         return np.array(self.coords, dtype=np.float32).reshape((-1, 1, 2))
 
     @property
     def rect(self) -> Tuple[float, float, float, float]:
-        """
-            Ограничивающий прямоугольник (bounding box) для фигуры.
-            Returns:
-                (minx, miny, maxx, maxy) как tuple из float.
-            Raises:
-                ValueError: Если coords пусты.
-        """
+        """ Ограничивающий прямоугольник (bounding box). """
         if not self.coords:
             raise ValueError("Shape.coords is empty, cannot compute bounds")
         poly = Polygon(self.coords)
@@ -86,42 +84,32 @@ class Shape:
 
     @property
     def line(self) -> Line:
-        """
-            Линия (shapely.geometry.LineString) по coords.
-            Returns:
-                Line: Линия по всем точкам coords.
-        """
+        """ shapely.geometry.LineString по coords. """
         return Line(self.coords)
 
     @property
     def shifted_coords(self) -> Coords:
         """
             Смещённые координаты (если shift_point задан).
-            Returns:
-                Coords: Список координат, сдвинутых относительно shift_point.
+            Supports nested coords (recursively).
         """
         if self.shift_point:
-            return [[x - self.shift_point.x, y - self.shift_point.y] for x, y in self.coords]
+            def shift_pair(pair):
+                # [x, y], любые числа (int, float, str)
+                return [float(pair[0]) - self.shift_point.x, float(pair[1]) - self.shift_point.y]
+            # Вложенные списки пока не поддерживаем, но можно рекурсивно
+            # Если надо, напиши -- добавим рекурсию для многомерных случаев
+            return [shift_pair(pair) for pair in self.coords]
         return self.coords
 
     @property
     def shifted_contour(self) -> np.ndarray:
-        """
-            Контур (np.ndarray) из смещённых координат.
-            Returns:
-                np.ndarray: Контур для OpenCV по смещённым coords, shape (N, 1, 2).
-        """
+        """ Контур по смещённым координатам. """
         return np.array(self.shifted_coords, dtype=np.float32).reshape((-1, 1, 2))
 
     @property
     def shifted_rect(self) -> Tuple[float, float, float, float]:
-        """
-            Ограничивающий прямоугольник по смещённым координатам.
-            Returns:
-                (minx, miny, maxx, maxy) как tuple из float.
-            Raises:
-                ValueError: Если coords пусты.
-        """
+        """ Bounding box по смещённым координатам. """
         if not self.shifted_coords:
             raise ValueError("Shape.shifted_coords is empty, cannot compute bounds")
         poly = Polygon(self.shifted_coords)
@@ -129,27 +117,70 @@ class Shape:
 
     @property
     def shifted_line(self) -> Line:
-        """
-            Линия (shapely.geometry.LineString) по смещённым координатам.
-            Returns:
-                Line: Линия по всем смещённым точкам.
-        """
+        """ shapely.geometry.LineString по смещённым координатам. """
         return Line(self.shifted_coords)
 
     def get(self, name: str, default: Any = None) -> Any:
-        """
-            Универсальный getter: ищет имя сначала среди стандартных атрибутов, затем в meta.
-            Args:
-                name (str): Имя атрибута или ключа meta.
-                default: Значение по умолчанию, если не найдено.
-            Returns:
-                Любое найденное значение, иначе default.
-        """
+        """ Универсальный getter: сначала стандартный атрибут, затем meta. """
         if hasattr(self, name):
             return getattr(self, name)
         if self.meta and name in self.meta:
             return self.meta[name]
         return default
+
+    @staticmethod
+    def set_shift_point(
+            shapes: List["Shape"],
+            shift_point: Any,
+            *,
+            label: Optional[str] = None,
+            wz_number: Optional[int] = None,
+            number: Optional[int] = None,
+            filter_fn: Optional[Callable[["Shape"], bool]] = None) -> List["Shape"]:
+        """
+            Возвращает новый список фигур с установленным shift_point.
+            Исходные фигуры не изменяются (иммутабельность).
+            Можно фильтровать по label, wz_number, number, а также с помощью произвольной функции.
+            Args:
+                shapes: Список фигур (Shape).
+                shift_point: Новая точка смещения (любого поддерживаемого формата).
+                label: (опц.) Фильтр по label.
+                wz_number: (опц.) Фильтр по номеру рабочей зоны.
+                number: (опц.) Фильтр по number (группе).
+                filter_fn: (опц.) Любая функция-фильтр (Shape -> bool).
+            Returns:
+                List[Shape]: Новый список фигур с обновлённым shift_point.
+        """
+        point = to_point(shift_point)
+
+        def match(shape):
+            if label is not None and shape.label != label:
+                return False
+            if wz_number is not None and shape.wz_number != wz_number:
+                return False
+            if number is not None and shape.number != number:
+                return False
+            if filter_fn and not filter_fn(shape):
+                return False
+            return True
+
+        return [
+            shape if not match(shape) else
+            Shape(
+                label=shape.label,
+                coords=shape.coords,
+                type=shape.type,
+                number=shape.number,
+                description=shape.description,
+                flags=shape.flags,
+                mask=shape.mask,
+                position=shape.position,
+                wz_number=shape.wz_number,
+                shift_point=point,
+                meta=shape.meta.copy()
+            )
+            for shape in shapes
+        ]
 
     def __repr__(self) -> str:
         """ Краткое строковое представление для дебага. """

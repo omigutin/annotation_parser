@@ -1,9 +1,10 @@
 __all__ = ['AnnotationParser']
 
-from typing import Tuple, Any, Optional
+from typing import Tuple, Any
 
 from ..adapters.base_adapter import AdapterType
 from ..shape import Shape
+from ..types import ShiftPointType
 
 
 class AnnotationParser:
@@ -12,7 +13,7 @@ class AnnotationParser:
     """
 
     @staticmethod
-    def parse(json_data: Any, adapter: AdapterType, shift_point: Optional[Any] = None) -> Tuple[Shape, ...]:
+    def parse(json_data: Any, adapter: AdapterType, shift_point: ShiftPointType = None) -> Tuple[Shape, ...]:
         """
             Преобразует json-данные аннотаций в кортеж фигур через указанный адаптер.
             Args:

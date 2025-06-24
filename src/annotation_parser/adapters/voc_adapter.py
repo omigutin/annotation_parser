@@ -1,12 +1,11 @@
 __all__ = ['VocAdapter']
 
-from typing import Optional, Any, Tuple, Dict
-
-from shapely.geometry import Point
+from typing import Any, Tuple, Dict
 
 from ..shape import Shape
+from ..types import ShiftPointType
 from ..public_enums import ShapeType
-from ..models.voc_models import JsonVocObject
+from ..models.voc_model import JsonVocObject
 from .adapter_registration import AdapterRegistration
 from .base_adapter import BaseAdapter
 
@@ -20,12 +19,12 @@ class VocAdapter(BaseAdapter, metaclass=AdapterRegistration):
     adapter_name = "voc"
 
     @staticmethod
-    def load(json_data: Any, shift_point: Optional[Point] = None) -> Tuple[Shape, ...]:
+    def load(json_data: Any, shift_point: ShiftPointType = None) -> Tuple[Shape, ...]:
         """
             Преобразует VOC-аннотацию (dict с объектами) в кортеж Shape.
             Args:
                 json_data (dict): Данные VOC (например, {"objects": [...]}).
-                shift_point (Optional[Point]): Опциональное смещение координат.
+                shift_point (ShiftPointType): Опциональное смещение координат.
             Returns:
                 Tuple[Shape, ...]: Кортеж Shape.
             Raises:
@@ -45,24 +44,19 @@ class VocAdapter(BaseAdapter, metaclass=AdapterRegistration):
         return tuple(result)
 
     @staticmethod
-    def to_shape(obj: JsonVocObject, shift_point: Optional[Point] = None) -> Shape:
+    def to_shape(obj: JsonVocObject, shift_point: ShiftPointType = None) -> Shape:
         """
             Преобразует JsonVocObject в Shape.
             Args:
                 obj (JsonVocObject): Объект VOC.
-                shift_point (Optional[Point]): Смещение.
+                shift_point (ShiftPointType): Смещение.
             Returns:
                 Shape: Бизнес-объект.
         """
-        shape_type = ShapeType.RECTANGLE
-        coords = BaseAdapter._two_coords_to_four(
-            [[obj.bndbox_xmin, obj.bndbox_ymin], [obj.bndbox_xmax, obj.bndbox_ymax]],
-            shape_type
-        )
         return Shape(
             label=obj.name,
-            coords=coords,
-            type=shape_type,
+            coords=[[obj.bndbox_xmin, obj.bndbox_ymin], [obj.bndbox_xmax, obj.bndbox_ymax]],
+            type=ShapeType.RECTANGLE,
             number=None,
             description=None,
             flags=None,
@@ -98,12 +92,10 @@ class VocAdapter(BaseAdapter, metaclass=AdapterRegistration):
             Returns:
                 JsonVocObject: Модель VOC.
         """
-        # Приводим координаты к 4 точкам в любом случае
-        coords = BaseAdapter._two_coords_to_four(shape.coords, ShapeType.RECTANGLE)
-        if not (isinstance(coords, (list, tuple)) and len(coords) == 4):
+        if not (isinstance(shape.coords, (list, tuple)) and len(shape.coords) == 4):
             raise ValueError("Некорректные координаты для VOC: должны быть 2 или 4 точки")
-        xmin, ymin = coords[0]
-        xmax, ymax = coords[2]
+        xmin, ymin = shape.coords[0]
+        xmax, ymax = shape.coords[2]
         return JsonVocObject(
             name=shape.label,
             bndbox_xmin=float(xmin),
