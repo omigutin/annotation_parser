@@ -3,8 +3,6 @@
   "flags": {},
   "shapes": [
     {
-      "wz": 7,
-      "position": "left",
       "label": "promt",
       "points": [
         [
@@ -31,8 +29,6 @@
       "mask": null
     },
     {
-      "wz": null,
-      "position": "bottom",
       "label": "crop",
       "points": [
         [
